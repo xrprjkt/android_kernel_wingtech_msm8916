@@ -5,7 +5,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-20.04
 
     steps:
 
@@ -20,16 +20,17 @@ jobs:
             libssl-dev libelf-dev \
             gcc-arm-linux-gnueabihf \
             binutils-arm-linux-gnueabihf \
-            device-tree-compiler
+            device-tree-compiler \
+            python2
 
-      - name: Fix Python2 and DTC issues
+      - name: Fix DTC issue
         run: |
-          # Fix semua syntax Python2 di gcc-wrapper.py sekaligus
-          python3 -m lib2to3 -w scripts/gcc-wrapper.py
-
-          # Fix dtc yylloc conflict
           sed -i 's/^YYLTYPE yylloc;/extern YYLTYPE yylloc;/' \
             scripts/dtc/dtc-lexer.lex.c_shipped
+
+      - name: Set Python2 as default
+        run: |
+          sudo ln -sf /usr/bin/python2 /usr/bin/python
 
       - name: Clone AnyKernel3
         run: |
