@@ -22,15 +22,12 @@ jobs:
             binutils-arm-linux-gnueabihf \
             device-tree-compiler
 
-      # Fix 1: gcc-wrapper.py pakai print Python 2, ubah ke Python 3
-      # Fix 2: dtc yylloc conflict, patch file dtc-lexer
       - name: Fix Python2 and DTC issues
         run: |
-          # Fix gcc-wrapper.py: print "x" → print("x")
-          sed -i 's/print "error, forbidden warning:", m.group(2)/print("error, forbidden warning:", m.group(2))/' \
-            scripts/gcc-wrapper.py
+          # Fix semua syntax Python2 di gcc-wrapper.py sekaligus
+          python3 -m lib2to3 -w scripts/gcc-wrapper.py
 
-          # Fix dtc yylloc: tambah extern supaya tidak double definition
+          # Fix dtc yylloc conflict
           sed -i 's/^YYLTYPE yylloc;/extern YYLTYPE yylloc;/' \
             scripts/dtc/dtc-lexer.lex.c_shipped
 
