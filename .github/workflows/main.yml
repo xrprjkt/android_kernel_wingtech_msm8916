@@ -9,11 +9,9 @@ jobs:
 
     steps:
 
-      # Checkout repo ini (kernel source)
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Install toolchain dan dependensi
       - name: Install Dependencies
         run: |
           sudo apt-get update -qq
@@ -24,14 +22,24 @@ jobs:
             binutils-arm-linux-gnueabihf \
             device-tree-compiler
 
-      # Clone AnyKernel3 dari Osm0sis
+      # Fix 1: gcc-wrapper.py pakai print Python 2, ubah ke Python 3
+      # Fix 2: dtc yylloc conflict, patch file dtc-lexer
+      - name: Fix Python2 and DTC issues
+        run: |
+          # Fix gcc-wrapper.py: print "x" → print("x")
+          sed -i 's/print "error, forbidden warning:", m.group(2)/print("error, forbidden warning:", m.group(2))/' \
+            scripts/gcc-wrapper.py
+
+          # Fix dtc yylloc: tambah extern supaya tidak double definition
+          sed -i 's/^YYLTYPE yylloc;/extern YYLTYPE yylloc;/' \
+            scripts/dtc/dtc-lexer.lex.c_shipped
+
       - name: Clone AnyKernel3
         run: |
           git clone --depth=1 \
             https://github.com/osm0sis/AnyKernel3.git \
             AnyKernel3
 
-      # Compile kernel
       - name: Build Kernel
         run: |
           make ARCH=arm \
@@ -43,18 +51,16 @@ jobs:
                CROSS_COMPILE=arm-linux-gnueabihf- \
                zImage dtbs
 
-      # Cek hasil build
       - name: Check Output
         run: |
           if [ -f arch/arm/boot/zImage ]; then
             echo "✅ zImage berhasil dibuild!"
             ls -lh arch/arm/boot/zImage
           else
-            echo "❌ Build gagal, zImage tidak ditemukan."
+            echo "❌ Build gagal."
             exit 1
           fi
 
-      # Kemas jadi ZIP siap flash
       - name: Package with AnyKernel3
         run: |
           cp arch/arm/boot/zImage AnyKernel3/
@@ -86,7 +92,6 @@ jobs:
           zip -r9 ../kernel-wt88047-$(date +%Y%m%d).zip . \
             -x "*.git*" "*.md" "LICENSE" "README*"
 
-      # Upload ZIP sebagai artifact
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
