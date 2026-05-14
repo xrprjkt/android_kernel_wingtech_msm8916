@@ -1,0 +1,95 @@
+name: Build Kernel
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+
+      # Checkout repo ini (kernel source)
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Install toolchain dan dependensi
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y \
+            git bc bison flex make zip \
+            libssl-dev libelf-dev \
+            gcc-arm-linux-gnueabihf \
+            binutils-arm-linux-gnueabihf \
+            device-tree-compiler
+
+      # Clone AnyKernel3 dari Osm0sis
+      - name: Clone AnyKernel3
+        run: |
+          git clone --depth=1 \
+            https://github.com/osm0sis/AnyKernel3.git \
+            AnyKernel3
+
+      # Compile kernel
+      - name: Build Kernel
+        run: |
+          make ARCH=arm \
+               CROSS_COMPILE=arm-linux-gnueabihf- \
+               lineageos_wt88047_defconfig
+
+          make -j$(nproc) \
+               ARCH=arm \
+               CROSS_COMPILE=arm-linux-gnueabihf- \
+               zImage dtbs
+
+      # Cek hasil build
+      - name: Check Output
+        run: |
+          if [ -f arch/arm/boot/zImage ]; then
+            echo "✅ zImage berhasil dibuild!"
+            ls -lh arch/arm/boot/zImage
+          else
+            echo "❌ Build gagal, zImage tidak ditemukan."
+            exit 1
+          fi
+
+      # Kemas jadi ZIP siap flash
+      - name: Package with AnyKernel3
+        run: |
+          cp arch/arm/boot/zImage AnyKernel3/
+
+          mkdir -p AnyKernel3/dtb
+          find arch/arm/boot/dts/qcom -name "*.dtb" \
+            -exec cp {} AnyKernel3/dtb/ \; 2>/dev/null || true
+
+          cat > AnyKernel3/anykernel.sh << 'EOF'
+          properties() { '
+          kernel.string=Custom Kernel - Redmi 2 (wt88047)
+          do.devicecheck=1
+          do.modules=0
+          do.cleanup=1
+          do.cleanuponabort=0
+          device.name1=wt88047
+          device.name2=HM2014811
+          device.name3=wt86047
+          '; }
+          block=boot;
+          is_slot_device=0;
+          ramdisk_compression=auto;
+          . tools/ak3-core.sh;
+          split_boot;
+          flash_boot;
+          EOF
+
+          cd AnyKernel3
+          zip -r9 ../kernel-wt88047-$(date +%Y%m%d).zip . \
+            -x "*.git*" "*.md" "LICENSE" "README*"
+
+      # Upload ZIP sebagai artifact
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-wt88047-${{ github.run_number }}
+          path: "*.zip"
+          retention-days: 7
